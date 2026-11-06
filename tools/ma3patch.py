@@ -128,6 +128,61 @@ def build_rebuild_refresh(orig: bytes) -> bytes:
     return splice(orig, 3, bytes.fromhex("33 d2 90 90 90 90"))
 
 
+# --- dpi: per-monitor DPI awareness via the application manifest -----------------------
+# RT_MANIFEST #1 is the last blob in .rsrc and is followed by linker padding, so the
+# extended manifest is written in place; the resource data entry size, .rsrc VirtualSize
+# and DataDirectory[RESOURCE].Size are updated. Mirrors ManifestSite in the .ps1.
+ORIG_MANIFEST = (
+    b'<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">'
+    b'<assemblyIdentity version="1.0.0.0" processorArchitecture="X86" name="MarineAquarium3" type="win32"></assemblyIdentity>'
+    b'<description>SereneScreen Marine Aquarium Version 3</description>'
+    b'<dependency><dependentAssembly><assemblyIdentity type="win32" name="Microsoft.Windows.Common-Controls" version="6.0.0.0" processorArchitecture="X86" publicKeyToken="6595b64144ccf1df" language="*"></assemblyIdentity></dependentAssembly></dependency>'
+    b'<trustInfo xmlns="urn:schemas-microsoft-com:asm.v3"><security><requestedPrivileges><requestedExecutionLevel level="asInvoker" uiAccess="false"></requestedExecutionLevel></requestedPrivileges></security></trustInfo>'
+    b'</assembly>')
+DPI_BLOCK = (
+    b'<application xmlns="urn:schemas-microsoft-com:asm.v3"><windowsSettings>'
+    b'<dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>'
+    b'<dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2, PerMonitor</dpiAwareness>'
+    b'</windowsSettings></application>')
+NEW_MANIFEST = ORIG_MANIFEST.replace(b'</assembly>', DPI_BLOCK + b'</assembly>')
+
+
+def apply_manifest(data: bytearray):
+    import struct
+    if data.count(ORIG_MANIFEST) != 1:
+        sys.exit("error: dpi: original manifest not found exactly once")
+    off = data.find(ORIG_MANIFEST)
+    lfanew = struct.unpack_from('<I', data, 0x3c)[0]
+    nsec, = struct.unpack_from('<H', data, lfanew + 6)
+    optsize, = struct.unpack_from('<H', data, lfanew + 20)
+    for i in range(nsec):
+        h = lfanew + 24 + optsize + i * 40
+        vsize, va, rawsize, raw = struct.unpack_from('<4I', data, h + 8)
+        if raw <= off < raw + rawsize:
+            break
+    else:
+        sys.exit("error: dpi: manifest not inside a section")
+    rva = off - raw + va
+    entry = struct.pack('<II', rva, len(ORIG_MANIFEST))
+    if data.count(entry) != 1:
+        sys.exit("error: dpi: resource data entry not found exactly once")
+    entry_off = data.find(entry)
+    end = off + len(NEW_MANIFEST)
+    if end > raw + rawsize:
+        sys.exit("error: dpi: no room for the extended manifest")
+    if any(b not in b'PADDINGX\0' for b in data[off + len(ORIG_MANIFEST):end]):
+        sys.exit("error: dpi: unexpected data after the manifest")
+    data[off:end] = NEW_MANIFEST
+    struct.pack_into('<I', data, entry_off + 4, len(NEW_MANIFEST))
+    new_vsize = (off - raw) + len(NEW_MANIFEST)
+    if new_vsize > vsize:
+        struct.pack_into('<I', data, h + 8, new_vsize)
+        dd = lfanew + 24 + 96 + 2 * 8
+        if struct.unpack_from('<II', data, dd) == (va, vsize):
+            struct.pack_into('<I', data, dd + 4, new_vsize)
+    return off
+
+
 PATCHES = {
     "borderless": Patch(
         "borderless",
@@ -166,7 +221,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("input", type=Path, help="original MarineAquarium3.scr")
     ap.add_argument("output", type=Path, nargs="?", help="where to write the patched copy")
-    ap.add_argument("--patch", action="append", choices=sorted(PATCHES), default=None,
+    ap.add_argument("--patch", action="append", choices=sorted(PATCHES) + ["dpi"], default=None,
                     help="patch(es) to apply (default: all)")
     ap.add_argument("--check", action="store_true", help="only report whether patch sites are found")
     args = ap.parse_args()
@@ -179,7 +234,7 @@ def main():
     print(f"input : {args.input}  sha256={hashlib.sha256(data).hexdigest()[:16]}...")
 
     plan = []
-    for name in args.patch or list(PATCHES):
+    for name in [n for n in (args.patch or list(PATCHES)) if n in PATCHES]:
         p = PATCHES[name]
         print(f"[{name}] {p.desc}")
         for s in p.sites:
@@ -201,6 +256,9 @@ def main():
 
     for off, new in plan:
         data[off:off + len(new)] = new
+    if args.patch is None or "dpi" in args.patch:
+        print(f"[dpi] Per-monitor DPI awareness (manifest)")
+        print(f"    0x{apply_manifest(data):06x}  manifest: per-monitor DPI aware")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_bytes(data)
     fix_checksum(args.output)

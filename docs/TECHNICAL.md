@@ -84,7 +84,47 @@ resolution, never a previously saved fallback mode.
 `mov edx,[eax+desktopRefresh]` → `xor edx,edx / nop×4`. A windowed `Reset` requires
 `FullScreen_RefreshRateInHz = 0`.
 
-The PE checksum is recalculated afterwards. In total, 39 bytes of code change (26 + 6 + 1 + 6). Some bytes in site 1 are rewritten with the same value.
+In total, 39 bytes of code change (26 + 6 + 1 + 6). Some bytes in site 1 are rewritten with the same value.
+
+## The patch (`dpi`) — added in v1.1.0
+
+### Problem
+
+The original manifest declares no DPI awareness. On a monitor with Windows display
+scaling (for example 150%), Windows virtualises coordinates for the process and
+bitmap-stretches its windows. The monitor rectangles the framework builds come from
+`EnumDisplaySettings` (`dmPosition` / `dmPelsWidth`), so its popup window comes out
+oversized and only part of the rendered view is visible. The picture looks zoomed in.
+
+### Site 5: application manifest (`RT_MANIFEST` #1)
+
+The manifest gets a standard `<application><windowsSettings>` block with
+`<dpiAware>true/pm</dpiAware>` and `<dpiAwareness>PerMonitorV2, PerMonitor</dpiAwareness>`.
+The process then runs per-monitor DPI aware. All window, monitor and back-buffer sizes are
+physical pixels, which is what the framework already assumes.
+
+The manifest (730 bytes) is the last item in `.rsrc`. It's followed by 436 bytes of linker
+padding (`PADDINGXXPADDING…`) inside the section's raw data, so the extended manifest
+(1038 bytes) is written **in place**, and nothing else in the file moves. The patcher:
+
+1. finds the exact original manifest text (it must occur once) and its
+   `IMAGE_RESOURCE_DATA_ENTRY` (RVA and size must occur once);
+2. checks that the bytes it overwrites past the old manifest are only linker padding, and
+   that the new manifest fits inside the section's raw data;
+3. writes the new manifest and updates the data entry's size, `.rsrc` `VirtualSize` and
+   `DataDirectory[RESOURCE].Size` (0x5fb44c → 0x5fb57e). `SizeOfImage` already covers it.
+
+The PE checksum is recalculated afterwards.
+
+Measured with `GetProcessDpiAwareness` on the settings dialog process: the original build
+starts **UNAWARE**, and the patched build starts **PER_MONITOR_AWARE**.
+
+## Upgrading copies patched by v1.0.0
+
+Each site reports *Original*, *Patched* or *Missing*. If every site is Original or Patched
+(some of each), the file is *Partial*, meaning it was patched by an older version. The
+patcher applies only the Original sites and keeps the existing `.bak` (which must be an
+unpatched original). The result is byte-identical to patching an original file.
 
 ## What is *not* changed
 
@@ -99,5 +139,3 @@ The PE checksum is recalculated afterwards. In total, 39 bytes of code change (2
   copy of DXVK under a different name. Installing DXVK as `d3d9.dll` next to a
   screensaver in `SysWOW64` would hijack Direct3D 9 for every 32-bit program on the system.
 - **Robustness:** skip `RestoreDeviceObjects` for units whose `Reset` failed (`0x409431`).
-- **DPI:** the manifest doesn't declare DPI awareness, and the monitor rectangles come from
-  `EnumDisplaySettings` (physical pixels).

@@ -39,10 +39,14 @@ own display mode. On modern setups that goes wrong:
   saves the lower resolution and keeps using it.
 - **It can crash on startup** on multi-monitor, high-refresh setups.
 - Monitors visibly blank and resync when the screensaver starts and stops.
+- **The picture looks zoomed in** on monitors that use Windows display scaling (125%, 150%…).
+  The screensaver predates per-monitor scaling, so Windows enlarges it and part of the
+  picture ends up off-screen.
 
 **After patching**, the screensaver draws into a borderless window that covers each
-monitor. Monitors are never switched out of their desktop mode, so every display stays at
-its native resolution and refresh rate.
+monitor exactly. Monitors are never switched out of their desktop mode, so every display
+stays at its native resolution and refresh rate. The screensaver is also marked as
+per-monitor DPI aware, so scaled monitors show the full picture at full sharpness.
 
 ## Requirements
 
@@ -89,6 +93,12 @@ Double-click **`Restore Original.cmd`**. The original file is kept next to the s
 as `MarineAquarium3.scr.bak` until you restore it. Uninstalling Marine Aquarium 3 normally
 also removes the patched file.
 
+### Updating from an older version of the patch
+
+Download the new release and double-click **`Install Patch.cmd`** again. It recognises a copy
+patched by an older version, applies only what's new, and keeps your original backup.
+`Check Status.cmd` shows *"Patched by an older version of this patch"* for such copies.
+
 ### Fixing a resolution that was already saved wrong
 
 You don't need to do anything. The patched screensaver always uses each monitor's desktop
@@ -100,11 +110,12 @@ The patcher is deliberately conservative:
 
 - It **refuses to touch** any file it doesn't recognise. Every patch location is found by an
   exact byte pattern, and all of them must match exactly once. Any mismatch (an unknown
-  version, or an already-modified file) means nothing is written.
+  version, or a file modified by something else) means nothing is written.
 - It **always makes a backup** before changing anything, and checks the result after writing.
-- It only changes **39 bytes** of display-setup code (plus the file's checksum field). It does not
-  touch registration, licensing, or trial code in any way. See
-  [docs/TECHNICAL.md](docs/TECHNICAL.md) for every byte that changes and why.
+- It only changes **39 bytes** of display-setup code, adds a standard DPI-awareness setting
+  to the program's manifest (the settings block Windows reads when starting a program), and
+  updates the matching size fields and checksum. It does not touch registration, licensing,
+  or trial code in any way. See [docs/TECHNICAL.md](docs/TECHNICAL.md) for every change and why.
 - Running it twice is harmless; it reports *Already patched*.
 
 ## Compatibility
@@ -127,8 +138,8 @@ If `Check Status.cmd` says your build is **Unknown**, please
 
 ## Known limitations
 
-- **Display scaling above 100%** hasn't been tested. The screensaver isn't DPI-aware, so on a
-  scaled monitor the image may not fill the screen exactly. Reports welcome.
+- The screensaver's **settings dialog** hasn't been checked on scaled monitors. It may look
+  small or slightly off there. Reports welcome.
 - Frames are presented through the Windows desktop compositor (like any borderless game).
   This is normally smooth; if you notice stutter, please open an issue.
 
@@ -137,7 +148,6 @@ If `Check Status.cmd` says your build is **Unknown**, please
 - **Optional Vulkan renderer via [DXVK](https://github.com/doitsujin/dxvk)**, for modern
   presentation and frame pacing, without replacing the system's `d3d9.dll`.
 - Guard against a device failing on one monitor taking down the whole screensaver.
-- DPI-awareness for scaled displays.
 
 ## For developers
 
