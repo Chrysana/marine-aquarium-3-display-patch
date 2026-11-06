@@ -47,6 +47,8 @@ own display mode. On modern setups that goes wrong:
 monitor exactly. Monitors are never switched out of their desktop mode, so every display
 stays at its native resolution and refresh rate. The screensaver is also marked as
 per-monitor DPI aware, so scaled monitors show the full picture at full sharpness.
+And if one monitor's display device fails anyway, that monitor stays black while the
+others keep running, instead of the whole screensaver crashing.
 
 ## Requirements
 
@@ -112,7 +114,7 @@ The patcher is deliberately conservative:
   exact byte pattern, and all of them must match exactly once. Any mismatch (an unknown
   version, or a file modified by something else) means nothing is written.
 - It **always makes a backup** before changing anything, and checks the result after writing.
-- It only changes **39 bytes** of display-setup code, adds a standard DPI-awareness setting
+- It only changes **107 bytes** of display-setup code, adds a standard DPI-awareness setting
   to the program's manifest (the settings block Windows reads when starting a program), and
   updates the matching size fields and checksum. It does not touch registration, licensing,
   or trial code in any way. See [docs/TECHNICAL.md](docs/TECHNICAL.md) for every change and why.
@@ -139,6 +141,11 @@ If `Check Status.cmd` says your build is **Unknown**, please
 
 ## Known limitations
 
+- **Keep the file name `MarineAquarium3.scr`.** The screensaver itself behaves differently
+  when its file is renamed: the background is missing and moving fish leave trails. The
+  same patched file works correctly under its original name, so this comes from the
+  original program, not from the patch's changes. The patcher always patches the file in
+  place, so this only matters if you copy or rename it yourself.
 - The screensaver's **settings dialog** hasn't been checked on scaled monitors. It may look
   small or slightly off there. Reports welcome.
 - Frames are presented through the Windows desktop compositor (like any borderless game).
@@ -148,7 +155,6 @@ If `Check Status.cmd` says your build is **Unknown**, please
 
 - **Optional Vulkan renderer via [DXVK](https://github.com/doitsujin/dxvk)**, for modern
   presentation and frame pacing, without replacing the system's `d3d9.dll`.
-- Guard against a device failing on one monitor taking down the whole screensaver.
 
 ## For developers
 

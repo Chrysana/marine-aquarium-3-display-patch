@@ -119,7 +119,61 @@ The PE checksum is recalculated afterwards.
 Measured with `GetProcessDpiAwareness` on the settings dialog process: the original build
 starts **UNAWARE**, and the patched build starts **PER_MONITOR_AWARE**.
 
-## Upgrading copies patched by v1.0.0
+## The patch (`robust`) — added in v1.2.0
+
+A safety net. With the borderless patch, device creation and reset should not fail, but if
+one monitor's device does fail, only that monitor should go black.
+
+### What the original framework does with a failed monitor
+
+Each render unit has a *failed* flag (`+0xE0`). It is set in exactly four places, all
+failure handlers: `CreateDevice` failed (`0x411118`), `Reset` failed (`0x409282`),
+`InitDeviceObjects` failed (`0x409453`) and `RestoreDeviceObjects` failed (`0x40947c`).
+Rendering (`0x40a83d`, `0x420bbf`) already skips failed units, but two paths do not:
+
+- **Per-unit setup** in `ResetAll` still calls `InitDeviceObjects` / `RestoreDeviceObjects`
+  on a failed unit whose scene was never loaded, which crashes (null fish model, see above).
+- **The per-frame device health check** (`0x40a651`) calls `TestCooperativeLevel` on every
+  unit. A failed unit keeps answering `D3DERR_DEVICENOTRESET`, so `ResetAll` runs every
+  frame. That retries the failed unit and resets all the others too. Result: about 1 FPS
+  with a black flash per frame.
+
+### Site 6: "skip this monitor?" (`0x4066f0`, 80 bytes)
+
+The framework's central check, used by 13 callers (setup, the health check, render and
+present loops, and others), skips units with no device, units that aren't the main window
+in windowed app mode, and units set to "Leave Black". It is rewritten within its own
+80 bytes with the same logic plus one extra test first: **skip units marked failed**. It no
+longer needs to save `esi`; it still only clobbers `eax`/`edx`. With the flag at 0 it
+behaves identically to the original. 64 bytes differ.
+
+### Site 7: forget a device whose `Reset` failed (`0x409282`, 4 bytes differ)
+
+`mov dword [edi+90h],1` (10 bytes) becomes `inc dword [edi+90h]` (6 bytes), which sets the
+same flag (every reader only tests it for zero). The 4 freed bytes hold
+`and dword [edi-3Ch],0`, which clears the unit's device pointer. The failed monitor is then
+handled exactly like one whose device was never created, a state the framework already
+supports everywhere, and `ResetAll` no longer retries it. The error code is still stored.
+
+### How it was tested
+
+- **Real failure, exclusive mode:** a test build with only site 1 (devices created windowed,
+  reset path still exclusive) reproduces the original crash on a 144 Hz monitor whose
+  exclusive `Reset` fails. With sites 6 + 7 added, it no longer crashes or loops.
+- **Injected failure, shipping configuration:** the full patch plus a test-only stub that
+  forces `D3DERR_INVALIDCALL` from one unit's `Reset`. The two other monitors render
+  normally, and the failed one stays black. Unit state was read from the running process
+  (failed flag set, device cleared, main unit unchanged), and screenshots confirmed it.
+- **No change in normal operation:** with nothing failing, unit state and screenshots match v1.1.
+
+### Side finding: the file name matters
+
+Renamed copies of the screensaver render without the background, so moving objects leave
+trails. This was confirmed with both v1.1 and v1.2 builds, and the same bytes render
+correctly under the original name. This is the original program's behavior and was not investigated further: it
+sits close to the program's identity and licensing code, which this project doesn't touch.
+
+## Upgrading copies patched by an older version
 
 Each site reports *Original*, *Patched* or *Missing*. If every site is Original or Patched
 (some of each), the file is *Partial*, meaning it was patched by an older version. The
@@ -131,11 +185,11 @@ unpatched original). The result is byte-identical to patching an original file.
 - Registration, licensing and trial logic: none of it is touched.
 - Saved settings in the registry are left as they are. They're simply not used for the back-buffer size.
 - The screensaver's own windowed/app mode (`StartWindowed`) and the preview pane use a
-  different code path (`0x40dbe0`) and behave exactly as before.
+  different code path (`0x40dbe0`) and behave as before. Site 6's extra check applies
+  there too, but only matters for a unit whose device has failed.
 
 ## Ideas for later
 
 - **DXVK:** rename the `d3d9.dll` import (it's only used for `Direct3DCreate9`) to a bundled
   copy of DXVK under a different name. Installing DXVK as `d3d9.dll` next to a
   screensaver in `SysWOW64` would hijack Direct3D 9 for every 32-bit program on the system.
-- **Robustness:** skip `RestoreDeviceObjects` for units whose `Reset` failed (`0x409431`).

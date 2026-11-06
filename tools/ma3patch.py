@@ -183,6 +183,27 @@ def apply_manifest(data: bytearray):
     return off
 
 
+# --- robust: site 6 — the framework's "skip this monitor?" check (0x4066f0) ----------
+# Original: skip if no device; in windowed (app) mode skip unless it's the main window;
+# otherwise skip if not valid or "Leave Black". Rewritten in its own 80 bytes with one
+# extra check first: skip if the unit is marked failed (+0E0h).
+ISSKIPPED_ORIG = (
+    "8b 54 24 04 83 7a 14 00 75 08 b8 01 00 00 00 c2 04 00 8b 81 ac d4 00 00 85 c0 74 1d "
+    "56 8b 32 8b b4 b1 38 f8 00 00 8b b6 b0 2b 00 00 3b b1 a8 d7 00 00 5e 75 d5 85 c0 75 0f "
+    "83 7a 04 00 74 cb 83 ba dc 00 00 00 00 75 c2 33 c0 c2 04 00 cc cc cc")
+ISSKIPPED_NEW = (
+    "8b 54 24 04"            # mov edx,[esp+4]            ; RenderUnit*
+    " 83 7a 14 00 74 3f"     # cmp [edx+14h],0 / je ret1  ; no device
+    " 83 ba e0 00 00 00 00 75 36"  # cmp [edx+0E0h],0 / jne ret1 ; NEW: failed
+    " 83 b9 ac d4 00 00 00 74 19"  # cmp [ecx+0D4ACh],0 / je fs   ; windowed app mode?
+    " 8b 02 8b 84 81 38 f8 00 00 8b 80 b0 2b 00 00"  # hwnd of this unit's adapter
+    " 3b 81 a8 d7 00 00 75 16 eb 0f"  # not main window -> ret1, else ret0
+    " 83 7a 04 00 74 0e"     # fs: cmp [edx+4],0 / je ret1
+    " 83 ba dc 00 00 00 00 75 05"  # cmp [edx+0DCh],0 / jne ret1 ; leave black
+    " 33 c0 c2 04 00"        # ret0: xor eax,eax / ret 4
+    " 33 c0 40 c2 04 00 cc") # ret1: eax=1 / ret 4 / pad
+
+
 PATCHES = {
     "borderless": Patch(
         "borderless",
@@ -201,6 +222,19 @@ PATCHES = {
             Site("reset: refresh 0",
                  "89 4e 48 8b 90 ?? ?? ?? ?? 8b 46 1c 89 56 44 83 f8 18",
                  build_rebuild_refresh),
+        ]),
+    # Safety net (v1.2.0): a monitor whose device fails stays black instead of crashing
+    # the screensaver or looping device resets. Mirrors sites 6 and 7 in the .ps1.
+    "robust": Patch(
+        "robust",
+        "Safety net: isolate a monitor whose display device fails",
+        [
+            Site("safety: skip monitors whose device failed",
+                 ISSKIPPED_ORIG, lambda o: bytes.fromhex(ISSKIPPED_NEW)),
+            Site("safety: forget a device whose reset failed",
+                 "6a 00 55 e8 ?? ?? ?? ?? 6a 00 55 e8 ?? ?? ?? ?? 83 c4 10 "
+                 "c7 87 90 00 00 00 01 00 00 00 89 af 94 00 00 00",
+                 lambda o: splice(o, 19, bytes.fromhex("ff 87 90 00 00 00 83 67 c4 00"))),
         ]),
 }
 

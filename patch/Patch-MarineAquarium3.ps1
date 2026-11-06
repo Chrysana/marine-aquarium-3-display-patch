@@ -9,6 +9,8 @@
     forcing a lower resolution or crashing on high-refresh multi-monitor setups.
     It also marks the screensaver as per-monitor DPI aware, so it fills monitors that use
     Windows display scaling (125%, 150%, ...) correctly instead of appearing zoomed in.
+    If the display device of one monitor fails, that monitor stays black while the others
+    keep running, instead of the whole screensaver crashing.
 
     This does NOT unlock, register, crack or provide the full version. It only edits
     display-related code and settings in a copy of MarineAquarium3.scr that you already
@@ -44,7 +46,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$PatchVersion = '1.1.0'
+$PatchVersion = '1.2.0'
 
 # Always run as a 64-bit process on 64-bit Windows, so System32 / SysWOW64 paths mean what
 # they say (a 32-bit PowerShell would see SysWOW64 under both names).
@@ -312,6 +314,32 @@ public static class Ma3Patch
         ManifestSite s5 = new ManifestSite();
         s5.Label = "manifest: per-monitor DPI aware";
         Sites.Add(s5);
+
+        // 6. Safety net: the framework's "skip this monitor?" check (used by setup, the
+        //    device health check, rendering and presenting) also skips monitors whose
+        //    device failed. Same logic as the original, plus that one check, rewritten
+        //    within the function's original 80 bytes.
+        SigSite s6 = new SigSite();
+        s6.Label = "safety: skip monitors whose device failed";
+        s6.Orig = P("8b 54 24 04 83 7a 14 00 75 08 b8 01 00 00 00 c2 04 00 8b 81 ac d4 00 00 85 c0 74 1d 56 8b 32 8b b4 b1 38 f8 00 00 8b b6 b0 2b 00 00 3b b1 a8 d7 00 00 5e 75 d5 85 c0 75 0f 83 7a 04 00 74 cb 83 ba dc 00 00 00 00 75 c2 33 c0 c2 04 00 cc cc cc");
+        s6.Patched = P("8b 54 24 04 83 7a 14 00 74 3f 83 ba e0 00 00 00 00 75 36 83 b9 ac d4 00 00 00 74 19 8b 02 8b 84 81 38 f8 00 00 8b 80 b0 2b 00 00 3b 81 a8 d7 00 00 75 16 eb 0f 83 7a 04 00 74 0e 83 ba dc 00 00 00 00 75 05 33 c0 c2 04 00 33 c0 40 c2 04 00 cc");
+        s6.Build = delegate(byte[] o) {
+            byte[] r = new byte[s6.Patched.Length];
+            for (int i = 0; i < r.Length; i++) r[i] = (byte)s6.Patched[i];
+            return r;
+        };
+        Sites.Add(s6);
+
+        // 7. Safety net: when a device Reset fails, also forget that monitor's device, so
+        //    it is treated like a monitor whose device was never created and is not
+        //    retried on every reset (which caused a reset loop). "mov [failed],1" becomes
+        //    "inc [failed]" to make room; the error code is still stored.
+        SigSite s7 = new SigSite();
+        s7.Label = "safety: forget a device whose reset failed";
+        s7.Orig = P("6a 00 55 e8 ?? ?? ?? ?? 6a 00 55 e8 ?? ?? ?? ?? 83 c4 10 c7 87 90 00 00 00 01 00 00 00 89 af 94 00 00 00");
+        s7.Patched = P("6a 00 55 e8 ?? ?? ?? ?? 6a 00 55 e8 ?? ?? ?? ?? 83 c4 10 ff 87 90 00 00 00 83 67 c4 00 89 af 94 00 00 00");
+        s7.Build = delegate(byte[] o) { return Splice(o, 19, Hex("ff 87 90 00 00 00 83 67 c4 00")); };
+        Sites.Add(s7);
     }
 
     // Returns "Unpatched", "Patched", "Partial" (patched by an older version of this
