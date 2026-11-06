@@ -57,6 +57,9 @@ Windows; there is nothing to install.
 3. Double-click **`Install Patch.cmd`** and approve the administrator prompt.
 4. You should see `Patched successfully.` That's it. Use the screensaver as normal.
 
+The installer may put copies in both `C:\Windows\System32` and `C:\Windows\SysWOW64`. If so,
+the patcher lists and patches each one, and each gets its own backup.
+
 | File | What it does |
 |---|---|
 | `Install Patch.cmd` | Finds your installed `MarineAquarium3.scr`, backs it up, and patches it. |
@@ -102,7 +105,7 @@ The patcher is deliberately conservative:
 
 | Build | SHA-256 of `MarineAquarium3.scr` | Status |
 |---|---|---|
-| 3.3 trial, file dated 2020-10-13 | `26d4bad747d764fdcc340cf84b0230e857c800606f14e6911c4e4dcd0b5aed9e` | ✅ Tested |
+| 3.3 trial, file dated 2020-10-13 | `26d4bad747d764fdcc340cf84b0230e857c800606f14e6911c4e4dcd0b5aed9e` | ✅ Tested (patch + installer) |
 | 3.3 registered | — | Not yet tested. The patcher will tell you if it's unrecognised. |
 
 Tested on Windows 11 with an AMD Radeon RX 9070 XT and three monitors: 3440×1440 @ 120 Hz,
