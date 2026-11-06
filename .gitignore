@@ -1,0 +1,28 @@
+# WHITELIST: ignore everything, then allow only the project's own source files.
+# This folder also holds the original installer, extracted screensaver, patched builds and
+# DXVK archives. None of those may ever be committed.
+*
+!.gitignore
+!.gitattributes
+!README.md
+!LICENSE
+!docs/
+!docs/*.md
+!patch/
+!patch/*.ps1
+!patch/*.cmd
+!tools/
+!tools/*.py
+!tools/diagnostics/
+!tools/diagnostics/*.py
+
+# Belt and braces: never commit binaries, even if a rule above is loosened later.
+*.scr
+*.exe
+*.dll
+*.bak
+*.tar
+*.gz
+*.zip
+*.dmp
+__pycache__/
