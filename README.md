@@ -111,8 +111,12 @@ The patcher is deliberately conservative:
 
 | Build | SHA-256 of `MarineAquarium3.scr` | Status |
 |---|---|---|
-| 3.3 trial, file dated 2020-10-13 | `26d4bad747d764fdcc340cf84b0230e857c800606f14e6911c4e4dcd0b5aed9e` | ✅ Tested (patch + installer) |
-| 3.3 registered | — | Not yet tested. The patcher will tell you if it's unrecognised. |
+| 3.3, file dated 2020-10-13 — **trial and registered** | `26d4bad747d764fdcc340cf84b0230e857c800606f14e6911c4e4dcd0b5aed9e` | ✅ Tested (patch + installer) |
+
+The trial and registered versions use the **same, byte-identical** `MarineAquarium3.scr`.
+Registration is stored separately in your Windows user settings, not in the file, so
+patching neither needs nor affects it. Other builds haven't been seen yet; the patcher
+will tell you if yours is unrecognised.
 
 Tested on Windows 11 with an AMD Radeon RX 9070 XT and three monitors: 3440×1440 @ 120 Hz,
 2560×1440 @ 144 Hz and 2560×1440 @ 360 Hz.
