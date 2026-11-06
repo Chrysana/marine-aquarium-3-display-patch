@@ -130,7 +130,8 @@ patching neither needs nor affects it. Other builds haven't been seen yet; the p
 will tell you if yours is unrecognised.
 
 Tested on Windows 11 with an AMD Radeon RX 9070 XT and three monitors: 3440×1440 @ 120 Hz,
-2560×1440 @ 144 Hz and 2560×1440 @ 360 Hz.
+2560×1440 @ 144 Hz and 2560×1440 @ 360 Hz, including one monitor at 175% display scaling
+alongside monitors at 100%.
 
 If `Check Status.cmd` says your build is **Unknown**, please
 [open an issue](../../issues) with the SHA-256 of your file. Get it with
