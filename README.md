@@ -20,6 +20,12 @@ This project is not affiliated with, endorsed by, or supported by SereneScreen o
 Publishing, Inc. "Marine Aquarium" and "SereneScreen" are trademarks of their respective
 owners. Please don't contact them for support with this patch.
 
+> [!NOTE]
+> **Made with AI.** The reverse engineering, patch, scripts and documentation in this
+> repository were produced with **Claude** (Anthropic's AI model, via Claude Code), under
+> the direction of and tested by the repository owner. See
+> [How this was made](#how-this-was-made) for details.
+
 ---
 
 ## What problem does this fix?
@@ -138,6 +144,27 @@ If `Check Status.cmd` says your build is **Unknown**, please
 - [`tools/diagnostics/`](tools/diagnostics) — scripts that reproduce the screensaver's display
   mode enumeration and test windowed D3D9 device creation on each monitor.
 - [`docs/TECHNICAL.md`](docs/TECHNICAL.md) — root-cause analysis and a description of every patch site.
+
+## How this was made
+
+This project was built with **Claude Opus 5.5**, Anthropic's AI model, working in Claude
+Code. The repository owner directed the work, decided its scope, and ran every test on real
+hardware. The AI did the technical work:
+
+- **Analysis:** disassembled the screensaver from the owner's own installed copy, identified
+  the display-setup code, and read a crash dump to find the root cause. The full write-up is
+  in [docs/TECHNICAL.md](docs/TECHNICAL.md).
+- **Code:** wrote the patch, the PowerShell patcher and its launchers, the Python reference
+  implementation, and the diagnostic scripts.
+- **Docs:** wrote this README and the technical notes.
+
+The scope was deliberately limited to fixing display behaviour. The analysis never targeted
+registration, licensing or trial code, and the patch doesn't change them. No part of the
+original program is included in this repository. The patcher only contains short byte
+patterns it uses to find the code it changes.
+
+The patcher is a plain-text script so that anyone can review exactly what it does before
+running it. Corrections and reviews are welcome via issues and pull requests.
 
 ## License
 
